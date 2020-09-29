@@ -17,44 +17,28 @@ func rec(ptr *error) {
 	panic(val)
 }
 
-func prefixDigits(runes []rune) []rune {
-	for i, char := range runes {
+func prefixDigits(str string) string {
+	for i, char := range str {
 		if !isCharIn(charMapDigitsDecimal, char) {
-			return runes[:i]
+			return str[:i]
 		}
 	}
-	if len(runes) > 0 {
-		return runes
-	}
-	return nil
+	return str
 }
 
-func prefixIdent(runes []rune) []rune {
-	for i, char := range runes {
+func prefixIdent(str string) string {
+	for i, char := range str {
 		if i == 0 {
 			if !isCharIn(charMapIdentifierStart, char) {
-				return nil
+				return ""
 			}
 		} else {
 			if !isCharIn(charMapIdentifier, char) {
-				return runes[:i]
+				return str[:i]
 			}
 		}
 	}
-	if len(runes) > 0 {
-		return runes
-	}
-	return nil
-}
-
-func runesHavePrefix(runes []rune, prefix string) bool {
-	for i, char := range prefix {
-		if i < len(runes) && char == runes[i] {
-			continue
-		}
-		return false
-	}
-	return true
+	return str
 }
 
 func mustParseUint64(str string) uint64 {

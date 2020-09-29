@@ -42,7 +42,7 @@ Oversimplified example:
 		name, ok := (*ptr).(NodeNamedParam)
 		if ok {
 			// Guaranteed to break the query.
-			*ptr = NodeNamedParam(string(name) + `_renamed`)
+			*ptr = name + `_renamed`
 		}
 		return nil
 	})
@@ -112,43 +112,45 @@ simpler and shorter.
 import (
 	"fmt"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 )
 
 // Any AST node.
 type Node fmt.Stringer
 
 // Arbitrary text. Anything that wasn't recognized by the parser.
-type NodeText []rune
+type NodeText string
 
 // Implement the `Node` interface.
 func (self NodeText) String() string { return string(self) }
 
 // Text inside single quotes: ''. Escape sequences are not supported yet.
-type NodeQuoteSingle []rune
+type NodeQuoteSingle string
 
 // Implement the `Node` interface.
 func (self NodeQuoteSingle) String() string { return `'` + string(self) + `'` }
 
 // Text inside double quotes: "". Escape sequences are not supported yet.
-type NodeQuoteDouble []rune
+type NodeQuoteDouble string
 
 // Implement the `Node` interface.
 func (self NodeQuoteDouble) String() string { return `"` + string(self) + `"` }
 
 // Text inside grave quotes: ``. Escape sequences are not supported yet.
-type NodeQuoteGrave []rune
+type NodeQuoteGrave string
 
 // Implement the `Node` interface.
 func (self NodeQuoteGrave) String() string { return "`" + string(self) + "`" }
 
 // Content of a line comment: --, including the newline.
-type NodeCommentLine []rune
+type NodeCommentLine string
 
 // Implement the `Node` interface.
 func (self NodeCommentLine) String() string { return `--` + string(self) }
 
 // Content of a block comment: /* */.
-type NodeCommentBlock []rune
+type NodeCommentBlock string
 
 // Implement the `Node` interface.
 func (self NodeCommentBlock) String() string { return `/*` + string(self) + `*/` }
@@ -166,7 +168,7 @@ type NodeOrdinalParam uint
 func (self NodeOrdinalParam) String() string { return `$` + strconv.Itoa(int(self)) }
 
 // Named parameter preceded by colon: :identifier.
-type NodeNamedParam []rune
+type NodeNamedParam string
 
 // Implement the `Node` interface.
 func (self NodeNamedParam) String() string { return `:` + string(self) }
@@ -232,12 +234,12 @@ Example:
 	sql := ast.String()
 */
 func Parse(input string) (Nodes, error) {
-	state := parseState{source: []rune(input)}
+	state := parseState{source: input}
 	return state.parse()
 }
 
 type parseState struct {
-	source []rune
+	source string
 	cursor int
 }
 
@@ -308,7 +310,7 @@ func (self *parseState) maybePopCommentLine() NodeCommentLine {
 		self.cursor += len(`--`)
 		return NodeCommentLine(self.popStringUntilNewlineOrEof())
 	}
-	return nil
+	return ""
 }
 
 func (self *parseState) maybePopCommentBlock() NodeCommentBlock {
@@ -348,7 +350,7 @@ func (self *parseState) maybePopNamedParam() NodeNamedParam {
 		}
 	}
 
-	return nil
+	return ""
 }
 
 func (self *parseState) maybePopParens() NodeParens {
@@ -378,7 +380,7 @@ func (self *parseState) maybePopStringBetween(prefix string, suffix string) stri
 			return chunk
 		}
 
-		self.cursor++
+		self.inc()
 	}
 
 	panic(self.err(fmt.Errorf(`expected closing %q, found EOF`, suffix)))
@@ -403,7 +405,7 @@ func (self *parseState) popStringUntilNewlineOrEof() string {
 			return self.from(start)
 		}
 
-		self.cursor++
+		self.inc()
 	}
 
 	return self.from(start)
@@ -453,7 +455,12 @@ func (self *parseState) advance(nodes *Nodes, tail *int) {
 	if node != nil {
 		panic(self.err(fmt.Errorf(`unexpected non-nil node without advancing cursor`)))
 	}
-	self.cursor++
+	self.inc()
+}
+
+func (self *parseState) inc() {
+	_, size := utf8.DecodeRuneInString(self.rest())
+	self.cursor += size
 }
 
 func (self parseState) left() int {
@@ -475,22 +482,22 @@ func (self parseState) from(index int) string {
 }
 
 func (self parseState) next(prefix string) bool {
-	return runesHavePrefix(self.rest(), prefix)
+	return strings.HasPrefix(self.rest(), prefix)
 }
 
-func (self parseState) rest() []rune {
+func (self parseState) rest() string {
 	if self.more() {
 		return self.source[self.cursor:]
 	}
-	return nil
+	return ""
 }
 
 func (self parseState) preview() string {
 	const limit = 32
 	if self.left() > limit {
-		return string(self.source[self.cursor:self.cursor+limit]) + ` ...`
+		return self.source[self.cursor:self.cursor+limit] + ` ...`
 	}
-	return string(self.rest())
+	return self.rest()
 }
 
 func (self parseState) err(cause error) error {
