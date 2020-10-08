@@ -1,6 +1,6 @@
 ## Overview
 
-**SQL** **P**arse: simple parser for rewriting fragments of foreign code embedded in SQL queries, such as parameter placeholders: `$1` or `:ident`, or code encased in delimiters: `()` `[]` `{}`. Anything the parser doesn't recognize is preserved as text.
+**SQL** **P**arse: parser and formatter for rewriting foreign code embedded in SQL queries, such as parameter placeholders: `$1` or `:ident`, or code encased in delimiters: `()` `[]` `{}`. Anything the parser doesn't recognize is preserved as text.
 
 See the full documentation at https://godoc.org/github.com/mitranim/sqlp.
 

@@ -1,5 +1,5 @@
 /*
-Parser for rewriting fragments of foreign code embedded in SQL queries, such as
+Parser and formatter for rewriting foreign code embedded in SQL queries, such as
 parameter placeholders: `$1` or `:ident`, or code encased in delimiters: `()`
 `[]` `{}`. It supports the following SQL features:
 
