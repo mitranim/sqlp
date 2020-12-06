@@ -6,6 +6,10 @@ See the full documentation at https://godoc.org/github.com/mitranim/sqlp.
 
 ## Changelog
 
+### 0.1.2
+
+Added missing `(*Error).Unwrap`.
+
 ### 0.1.1
 
 Replaced `[]rune` with `string`. When parsing, we treat the input string as UTF-8, decoding on the fly.

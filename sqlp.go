@@ -476,7 +476,7 @@ func (self parseState) from(index int) string {
 		index = 0
 	}
 	if index < self.cursor {
-		return string(self.source[index:self.cursor])
+		return self.source[index:self.cursor]
 	}
 	return ``
 }
@@ -633,7 +633,12 @@ func (self *Error) Error() string {
 	if self.Cause != nil {
 		return self.Cause.Error()
 	}
-	return ``
+	return ""
+}
+
+// Implement a hidden interface in "errors".
+func (self *Error) Unwrap() error {
+	return self.Cause
 }
 
 /*
