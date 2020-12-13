@@ -1,6 +1,9 @@
 package sqlp
 
-import "strconv"
+import (
+	"strconv"
+	"unsafe"
+)
 
 func rec(ptr *error) {
 	val := recover()
@@ -41,8 +44,8 @@ func prefixIdent(str string) string {
 	return str
 }
 
-func mustParseUint64(str string) uint64 {
-	num, err := strconv.ParseUint(str, 10, 64)
+func mustParseNumber(str string) int64 {
+	num, err := strconv.ParseInt(str, 10, 64)
 	if err != nil {
 		panic(err)
 	}
@@ -73,14 +76,32 @@ func charMap(str string) []bool {
 	return charMap
 }
 
-func maybeAppendText(nodes *Nodes, node NodeText) {
-	if len(node) > 0 {
-		*nodes = append(*nodes, node)
-	}
+func appendStr(buf *[]byte, str string) {
+	*buf = append(*buf, str...)
 }
 
-func maybeAppendNode(nodes *Nodes, node Node) {
-	if node != nil {
-		*nodes = append(*nodes, node)
-	}
+func appendByte(buf *[]byte, char byte) {
+	*buf = append(*buf, char)
+}
+
+func appenderToStr(val interface{ Append(*[]byte) }) string {
+	var buf []byte
+	val.Append(&buf)
+	return bytesToMutableString(buf)
+}
+
+func appendEnclosed(buf *[]byte, prefix string, nodes Nodes, suffix string) {
+	appendStr(buf, prefix)
+	nodes.Append(buf)
+	appendStr(buf, suffix)
+}
+
+/*
+Allocation-free conversion. Reinterprets a byte slice as a string. Borrowed from
+the standard library. Reasonably safe. Should not be used when the underlying
+byte array is volatile, for example when it's part of a scratch buffer during
+SQL scanning.
+*/
+func bytesToMutableString(bytes []byte) string {
+	return *(*string)(unsafe.Pointer(&bytes))
 }

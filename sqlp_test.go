@@ -9,7 +9,7 @@ func TestParse(t *testing.T) {
 	test := func(input string, astExpected Nodes) {
 		ast, err := Parse(input)
 		if err != nil {
-			t.Fatalf("%+v", err)
+			t.Fatalf("failed to parse source:\n%v\nerror:\n%+v", input, err)
 		}
 
 		if !reflect.DeepEqual(astExpected, ast) {
@@ -69,6 +69,11 @@ func TestParse(t *testing.T) {
 	)
 
 	test(
+		"one -- two",
+		Nodes{NodeText(`one `), NodeCommentLine(" two")},
+	)
+
+	test(
 		"one -- two \n three",
 		Nodes{NodeText(`one `), NodeCommentLine(" two \n"), NodeText(" three")},
 	)
@@ -81,6 +86,11 @@ func TestParse(t *testing.T) {
 	test(
 		`1 $2::int`,
 		Nodes{NodeText(`1 `), NodeOrdinalParam(2), NodeDoubleColon{}, NodeText(`int`)},
+	)
+
+	test(
+		`one = $1 and two = $2`,
+		Nodes{NodeText(`one = `), NodeOrdinalParam(1), NodeText(` and two = `), NodeOrdinalParam(2)},
 	)
 
 	// For brevity.
@@ -120,7 +130,7 @@ func TestRewrite(t *testing.T) {
 	}
 }
 
-func TestTraverse(t *testing.T) {
+func TestTraverseShallow(t *testing.T) {
 	nodes := Nodes{
 		NodeText(`one`),
 		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
@@ -129,7 +139,7 @@ func TestTraverse(t *testing.T) {
 
 	var visited Nodes
 
-	err := Traverse(nodes, func(ptr *Node) error {
+	err := TraverseShallow(nodes, func(ptr *Node) error {
 		visited = append(visited, *ptr)
 		return nil
 	})
@@ -138,11 +148,12 @@ func TestTraverse(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(nodes, visited) {
-		t.Fatalf(`expected traversed AST to be %#v, got %#v`, nodes, visited)
+		t.Fatalf("expected traversed AST to be:\n%#v\ngot:\n%#v", nodes, visited)
 	}
 }
 
-func TestTraverseDeep(t *testing.T) {
+// TODO also test `NodeTraverseLeaves`.
+func TestTraverseLeaves(t *testing.T) {
 	nodes := Nodes{
 		NodeText(`one`),
 		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
@@ -151,7 +162,7 @@ func TestTraverseDeep(t *testing.T) {
 
 	var visited Nodes
 
-	err := TraverseDeep(nodes, func(ptr *Node) error {
+	err := TraverseLeaves(nodes, func(ptr *Node) error {
 		visited = append(visited, *ptr)
 		return nil
 	})
@@ -167,10 +178,11 @@ func TestTraverseDeep(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expected, visited) {
-		t.Fatalf(`expected traversed AST to be %#v, got %#v`, expected, visited)
+		t.Fatalf("expected traversed AST to be:\n%#v\ngot:\n%#v", expected, visited)
 	}
 }
 
+// TODO also test `NodeCopyDeep`.
 func TestCopyDeep(t *testing.T) {
 	source := Nodes{
 		NodeText(`one`),
@@ -184,7 +196,9 @@ func TestCopyDeep(t *testing.T) {
 		t.Fatalf(`expected source and copy to be identical; source: %#v; copy %#v`, source, copy)
 	}
 
-	err := TraverseDeep(source, func(ptr *Node) error {
+	// Also test the ability to deeply mutate the tree via leaf traversal. TODO
+	// move this to the appropriate test.
+	err := TraverseLeaves(source, func(ptr *Node) error {
 		*ptr = nil
 		return nil
 	})

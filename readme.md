@@ -6,6 +6,10 @@ See the full documentation at https://godoc.org/github.com/mitranim/sqlp.
 
 ## Changelog
 
+### 0.1.3
+
+Support incremental parsing via `Tokenizer`. Added a few utility functions related to tree traversal. Minor breaking renaming.
+
 ### 0.1.2
 
 Added missing `(*Error).Unwrap`.
