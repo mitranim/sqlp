@@ -47,6 +47,8 @@ func (self *Tokenizer) text() NodeText {
 	cursor := start
 
 	for self.more() {
+		// Parsing ahead, discarding the result, and rewinding is somewhat wasteful.
+		// TODO better approach.
 		if self.node() != nil {
 			self.cursor = cursor
 			break
@@ -60,6 +62,9 @@ func (self *Tokenizer) text() NodeText {
 
 func (self *Tokenizer) node() Node {
 	start := self.cursor
+	if node := self.maybeWhitespace(); self.cursor > start {
+		return node
+	}
 	if node := self.maybeQuoteSingle(); self.cursor > start {
 		return node
 	}
@@ -103,6 +108,14 @@ func (self *Tokenizer) node() Node {
 		return node
 	}
 	return nil
+}
+
+func (self *Tokenizer) maybeWhitespace() NodeWhitespace {
+	start := self.cursor
+	for self.isNextWhitespace() {
+		self.skipByte()
+	}
+	return NodeWhitespace(self.from(start))
 }
 
 func (self *Tokenizer) maybeQuoteSingle() NodeQuoteSingle {
@@ -289,6 +302,10 @@ func (self *Tokenizer) isNextString(prefix string) bool {
 
 func (self *Tokenizer) isNextByte(char byte) bool {
 	return self.headByte() == char
+}
+
+func (self *Tokenizer) isNextWhitespace() bool {
+	return isByteIn(byteMapWhitespace, self.headByte())
 }
 
 func (self *Tokenizer) skipByte() {

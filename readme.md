@@ -6,6 +6,10 @@ See the full documentation at https://godoc.org/github.com/mitranim/sqlp.
 
 ## Changelog
 
+### 0.1.4
+
+Added `NodeWhitespace`. This is emitted for any non-zero amount of whitespace. `NodeText` now contains only non-whitespace. The performance impact seems negligible.
+
 ### 0.1.3
 
 Support incremental parsing via `Tokenizer`. Added a few utility functions related to tree traversal. Minor breaking renaming.

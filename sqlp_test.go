@@ -6,6 +6,18 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	// For brevity.
+	type (
+		T = NodeText
+		W = NodeWhitespace
+		O = NodeOrdinalParam
+		N = NodeNamedParam
+		D = NodeDoubleColon
+		P = NodeParens
+		B = NodeBrackets
+		C = NodeCommentLine
+	)
+
 	test := func(input string, astExpected Nodes) {
 		ast, err := Parse(input)
 		if err != nil {
@@ -25,27 +37,27 @@ func TestParse(t *testing.T) {
 
 	test(
 		`[one two]`,
-		Nodes{NodeBrackets{NodeText(`one two`)}},
+		Nodes{B{T(`one`), W(` `), T(`two`)}},
 	)
 
 	test(
 		`one [two three]`,
-		Nodes{NodeText(`one `), NodeBrackets{NodeText(`two three`)}},
+		Nodes{T(`one`), W(` `), B{T(`two`), W(` `), T(`three`)}},
 	)
 
 	test(
 		`one [two three] four`,
-		Nodes{NodeText(`one `), NodeBrackets{NodeText(`two three`)}, NodeText(` four`)},
+		Nodes{T(`one`), W(` `), B{T(`two`), W(` `), T(`three`)}, W(` `), T(`four`)},
 	)
 
 	test(
 		`[one two] three`,
-		Nodes{NodeBrackets{NodeText(`one two`)}, NodeText(` three`)},
+		Nodes{B{NodeText(`one`), W(` `), T(`two`)}, W(` `), T(`three`)},
 	)
 
 	test(
 		`[one two] [three four]`,
-		Nodes{NodeBrackets{NodeText(`one two`)}, NodeText(` `), NodeBrackets{NodeText(`three four`)}},
+		Nodes{B{T(`one`), W(` `), T(`two`)}, W(` `), B{T(`three`), W(` `), T(`four`)}},
 	)
 
 	test(
@@ -65,48 +77,42 @@ func TestParse(t *testing.T) {
 
 	test(
 		`[[({one two})]]`,
-		Nodes{NodeBrackets{NodeBrackets{NodeParens{NodeBraces{NodeText(`one two`)}}}}},
+		Nodes{B{B{P{NodeBraces{T(`one`), W(` `), T(`two`)}}}}},
 	)
 
 	test(
 		"one -- two",
-		Nodes{NodeText(`one `), NodeCommentLine(" two")},
+		Nodes{T(`one`), W(` `), C(` two`)},
 	)
 
 	test(
 		"one -- two \n three",
-		Nodes{NodeText(`one `), NodeCommentLine(" two \n"), NodeText(" three")},
+		Nodes{T(`one`), W(` `), C(" two \n"), W(` `), T(`three`)},
 	)
 
 	test(
 		`one::two :three`,
-		Nodes{NodeText(`one`), NodeDoubleColon{}, NodeText(`two `), NodeNamedParam(`three`)},
+		Nodes{T(`one`), NodeDoubleColon{}, T(`two`), W(` `), N(`three`)},
 	)
 
 	test(
 		`1 $2::int`,
-		Nodes{NodeText(`1 `), NodeOrdinalParam(2), NodeDoubleColon{}, NodeText(`int`)},
+		Nodes{T(`1`), W(` `), O(2), NodeDoubleColon{}, T(`int`)},
 	)
 
 	test(
 		`one = $1 and two = $2`,
-		Nodes{NodeText(`one = `), NodeOrdinalParam(1), NodeText(` and two = `), NodeOrdinalParam(2)},
+		Nodes{T(`one`), W(` `), T(`=`), W(` `), O(1), W(` `), T(`and`), W(` `), T(`two`), W(` `), T(`=`), W(` `), O(2)},
 	)
-
-	// For brevity.
-	type T = NodeText
-	type O = NodeOrdinalParam
-	type N = NodeNamedParam
-	type D = NodeDoubleColon
 
 	test(
 		`$1 $2::int :three::text`,
-		Nodes{O(1), T(` `), O(2), D{}, T(`int `), N(`three`), D{}, T(`text`)},
+		Nodes{O(1), W(` `), O(2), D{}, T(`int`), W(` `), N(`three`), D{}, T(`text`)},
 	)
 
 	test(
 		`one = $1 and two = $1 and three = $2`,
-		Nodes{T(`one = `), O(1), T(` and two = `), O(1), T(` and three = `), O(2)},
+		Nodes{T(`one`), W(` `), T(`=`), W(` `), O(1), W(` `), T(`and`), W(` `), T(`two`), W(` `), T(`=`), W(` `), O(1), W(` `), T(`and`), W(` `), T(`three`), W(` `), T(`=`), W(` `), O(2)},
 	)
 }
 

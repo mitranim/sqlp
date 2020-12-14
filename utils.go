@@ -21,8 +21,8 @@ func rec(ptr *error) {
 }
 
 func prefixDigits(str string) string {
-	for i, char := range str {
-		if !isCharIn(charMapDigitsDecimal, char) {
+	for i := range str {
+		if !isByteIn(byteMapDigitsDecimal, str[i]) {
 			return str[:i]
 		}
 	}
@@ -30,13 +30,13 @@ func prefixDigits(str string) string {
 }
 
 func prefixIdent(str string) string {
-	for i, char := range str {
+	for i := range str {
 		if i == 0 {
-			if !isCharIn(charMapIdentifierStart, char) {
+			if !isByteIn(byteMapIdentifierStart, str[i]) {
 				return ""
 			}
 		} else {
-			if !isCharIn(charMapIdentifier, char) {
+			if !isByteIn(byteMapIdentifier, str[i]) {
 				return str[:i]
 			}
 		}
@@ -52,16 +52,17 @@ func mustParseNumber(str string) int64 {
 	return num
 }
 
-var charMapIdentifierStart = charMap(`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_`)
-var charMapIdentifier = charMap(`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_0123456789`)
-var charMapDigitsDecimal = charMap(`0123456789`)
+var byteMapIdentifierStart = byteMap(`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_`)
+var byteMapIdentifier = byteMap(`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_0123456789`)
+var byteMapDigitsDecimal = byteMap(`0123456789`)
+var byteMapWhitespace = byteMap(" \n\r\t\v")
 
-func isCharIn(chars []bool, char rune) bool {
+func isByteIn(chars []bool, char byte) bool {
 	index := int(char)
 	return index < len(chars) && chars[index]
 }
 
-func charMap(str string) []bool {
+func byteMap(str string) []bool {
 	var max int
 	for _, char := range str {
 		if int(char) > max {
@@ -69,11 +70,11 @@ func charMap(str string) []bool {
 		}
 	}
 
-	charMap := make([]bool, max+1)
+	byteMap := make([]bool, max+1)
 	for _, char := range str {
-		charMap[int(char)] = true
+		byteMap[int(char)] = true
 	}
-	return charMap
+	return byteMap
 }
 
 func appendStr(buf *[]byte, str string) {
