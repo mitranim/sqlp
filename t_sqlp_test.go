@@ -1,11 +1,12 @@
 package sqlp
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
 
-func TestParse(t *testing.T) {
+func TestParse(_ *testing.T) {
 	// For brevity.
 	type (
 		T = NodeText
@@ -13,26 +14,16 @@ func TestParse(t *testing.T) {
 		O = NodeOrdinalParam
 		N = NodeNamedParam
 		D = NodeDoubleColon
-		P = NodeParens
-		B = NodeBrackets
+		P = ParenNodes
+		B = BracketNodes
 		C = NodeCommentLine
 	)
 
 	test := func(input string, astExpected Nodes) {
 		ast, err := Parse(input)
-		if err != nil {
-			t.Fatalf("failed to parse source:\n%v\nerror:\n%+v", input, err)
-		}
-
-		if !reflect.DeepEqual(astExpected, ast) {
-			t.Fatalf("expected parsed AST to be:\n%#v\ngot:\n%#v\n", astExpected, ast)
-		}
-
-		strExpected := input
-		str := ast.String()
-		if strExpected != str {
-			t.Fatalf(`expected serialized AST to be %q, got %q`, strExpected, str)
-		}
+		try(err)
+		eq(astExpected, ast)
+		eq(input, ast.String())
 	}
 
 	test(
@@ -77,7 +68,7 @@ func TestParse(t *testing.T) {
 
 	test(
 		`[[({one two})]]`,
-		Nodes{B{B{P{NodeBraces{T(`one`), W(` `), T(`two`)}}}}},
+		Nodes{B{B{P{BraceNodes{T(`one`), W(` `), T(`two`)}}}}},
 	)
 
 	test(
@@ -116,15 +107,15 @@ func TestParse(t *testing.T) {
 	)
 }
 
-func TestRewrite(t *testing.T) {
+func TestRewrite(_ *testing.T) {
 	ast, err := Parse(`select * from [bracketed] where col1 = 123`)
 	if err != nil {
-		t.Fatalf("%+v", err)
+		panic(fmt.Errorf("%+v", err))
 	}
 
 	for i, node := range ast {
 		switch node.(type) {
-		case NodeBrackets:
+		case BracketNodes:
 			ast[i] = NodeText(`(select * from some_table where col2 = '456') as _`)
 		}
 	}
@@ -132,49 +123,36 @@ func TestRewrite(t *testing.T) {
 	expected := `select * from (select * from some_table where col2 = '456') as _ where col1 = 123`
 	actual := ast.String()
 	if expected != actual {
-		t.Fatalf(`expected serialized AST to be %q, got %q`, expected, actual)
+		panic(fmt.Errorf(`expected serialized AST to be %q, got %q`, expected, actual))
 	}
 }
 
-func TestTraverseShallow(t *testing.T) {
-	nodes := Nodes{
+func TestWalkNode(_ *testing.T) {
+	src := Nodes{
 		NodeText(`one`),
 		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
-		NodeParens{NodeText(`four`)},
+		ParenNodes{NodeText(`four`)},
 	}
 
 	var visited Nodes
-
-	err := TraverseShallow(nodes, func(ptr *Node) error {
-		visited = append(visited, *ptr)
-		return nil
+	WalkNode(src, func(val Node) {
+		visited = append(visited, val)
 	})
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
-
-	if !reflect.DeepEqual(nodes, visited) {
-		t.Fatalf("expected traversed AST to be:\n%#v\ngot:\n%#v", nodes, visited)
-	}
+	eq(src, visited)
 }
 
-// TODO also test `NodeTraverseLeaves`.
-func TestTraverseLeaves(t *testing.T) {
-	nodes := Nodes{
+// TODO also test `DeepWalkNodePtr`.
+func TestDeepWalkNode(_ *testing.T) {
+	src := Nodes{
 		NodeText(`one`),
 		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
-		NodeParens{NodeText(`four`)},
+		ParenNodes{NodeText(`four`)},
 	}
 
 	var visited Nodes
-
-	err := TraverseLeaves(nodes, func(ptr *Node) error {
-		visited = append(visited, *ptr)
-		return nil
+	DeepWalkNode(src, func(val Node) {
+		visited = append(visited, val)
 	})
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
 
 	expected := Nodes{
 		NodeText(`one`),
@@ -182,48 +160,53 @@ func TestTraverseLeaves(t *testing.T) {
 		NodeOrdinalParam(3),
 		NodeText(`four`),
 	}
+	eq(expected, visited)
+}
 
-	if !reflect.DeepEqual(expected, visited) {
-		t.Fatalf("expected traversed AST to be:\n%#v\ngot:\n%#v", expected, visited)
+func TestCopyNode(_ *testing.T) {
+	src := Nodes{
+		NodeText(`one`),
+		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
+		ParenNodes{NodeText(`four`)},
+	}
+
+	srcBackup := Nodes{
+		NodeText(`one`),
+		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
+		ParenNodes{NodeText(`four`)},
+	}
+
+	copy := CopyNode(src)
+	eq(src, copy)
+	eq(srcBackup, copy)
+
+	src[0] = nil
+	src[1].(Nodes)[0] = nil
+	src[1].(Nodes)[1] = nil
+	src[2].(ParenNodes)[0] = nil
+
+	expectedSrc := Nodes{nil, Nodes{nil, nil}, ParenNodes{nil}}
+	eq(expectedSrc, src)
+	eq(srcBackup, copy)
+}
+
+func try(err error) {
+	if err != nil {
+		panic(err)
 	}
 }
 
-// TODO also test `NodeCopyDeep`.
-func TestCopyDeep(t *testing.T) {
-	source := Nodes{
-		NodeText(`one`),
-		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
-		NodeParens{NodeText(`four`)},
-	}
-
-	copy := CopyDeep(source)
-
-	if !reflect.DeepEqual(source, copy) {
-		t.Fatalf(`expected source and copy to be identical; source: %#v; copy %#v`, source, copy)
-	}
-
-	// Also test the ability to deeply mutate the tree via leaf traversal. TODO
-	// move this to the appropriate test.
-	err := TraverseLeaves(source, func(ptr *Node) error {
-		*ptr = nil
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
-
-	expectedSource := Nodes{nil, Nodes{nil, nil}, NodeParens{nil}}
-	if !reflect.DeepEqual(expectedSource, source) {
-		t.Fatalf(`expected source nodes to become %#v, got %#v`, expectedSource, source)
-	}
-
-	expectedCopy := Nodes{
-		NodeText(`one`),
-		Nodes{NodeText(`two`), NodeOrdinalParam(3)},
-		NodeParens{NodeText(`four`)},
-	}
-
-	if !reflect.DeepEqual(expectedCopy, copy) {
-		t.Fatalf(`expected copy nodes to remain: %#v, got %#v`, expectedCopy, copy)
+func eq(exp, act interface{}) {
+	if !reflect.DeepEqual(exp, act) {
+		panic(fmt.Errorf(`
+expected (detailed):
+	%#[1]v
+actual (detailed):
+	%#[2]v
+expected (simple):
+	%[1]s
+actual (simple):
+	%[2]s
+`, exp, act))
 	}
 }

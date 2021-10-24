@@ -34,8 +34,8 @@ comment.
 Tokenization vs Parsing
 
 This library supports incremental parsing token by token, via `Tokenizer`. It
-also lets you parse into a fully-built AST via `Parse`. Choose the approach
-that better suits your use case.
+also lets you convert a sequence of tokens into a fully-built AST via `Parser`.
+Choose the approach that better suits your use case.
 
 Usage
 
@@ -44,14 +44,12 @@ Oversimplified example:
 	nodes, err := Parse(`select * from some_table where :ident::uuid = id`)
 	panic(err)
 
-	err := TraverseLeaves(nodes, func(ptr *Node) error {
+	WalkNodePtr(nodes, func(ptr *Node) {
 		switch node := (*ptr).(type) {
 		case NodeNamedParam:
 			*ptr = node + `_renamed`
 		}
-		return nil
 	})
-	panic(err)
 
 The AST now looks like this:
 
@@ -64,229 +62,103 @@ The AST now looks like this:
 */
 package sqlp
 
-import (
-	"fmt"
-)
-
 /*
-Parses a query and returns the AST. For the AST structure, see `Node` and the
-various node types. Also see `Tokenizer` and `Tokenizer.Next` for incremental
-parsing.
-
-Example:
-
-	nodes, err := Parse(`select * from some_table where id = :ident`)
-	panic(err)
-
-	err := TraverseLeaves(nodes, func(ptr *Node) error {
-		switch (*ptr).(type) {
-		case NodeNamedParam:
-			*ptr = NodeOrdinalParam(1)
-		}
-		return nil
-	})
-	panic(err)
+AST node. May be a primitive token or a structure. `Tokenizer` emits only
+primitive tokens.
 */
-func Parse(input string) (nodes Nodes, err error) {
-	defer rec(&err)
-	parse(&Tokenizer{Source: input}, &nodes)
-	return
+type Node interface {
+	Append([]byte) []byte
+	String() string
 }
 
-func parse(tokenizer *Tokenizer, nodes *Nodes) {
-	for {
-		node := tokenizer.Next()
-		if node == nil {
-			break
-		}
-		onNode(tokenizer, nodes, node)
-	}
+// Implemented by collection types such as `Nodes` and `ParenNodes`. Used by the
+// global `CopyNode` function.
+type Copier interface {
+	CopyNode() Node
 }
 
-func onNode(tokenizer *Tokenizer, nodes *Nodes, node Node) {
-	switch node := node.(type) {
-	case NodeParenOpen:
-		parseParens(tokenizer, nodes)
-
-	case NodeBracketOpen:
-		parseBrackets(tokenizer, nodes)
-
-	case NodeBraceOpen:
-		parseBraces(tokenizer, nodes)
-
-	case NodeParenClose, NodeBracketClose, NodeBraceClose:
-		panic(fmt.Errorf(`[sqlp] unexpected closing %q`, node))
-
-	default:
-		*nodes = append(*nodes, node)
-	}
+// Implemented by collection types such as `Nodes` and `ParenNodes`.
+type Coll interface {
+	Nodes() Nodes
 }
 
-func parseParens(tokenizer *Tokenizer, parent *Nodes) {
-	var nodes NodeParens
-	parseBetween(tokenizer, parent, (*Nodes)(&nodes), NodeParenClose{})
-	*parent = append(*parent, nodes)
+// Implemented by collection types such as `Nodes` and `ParenNodes`. Used by the
+// global function `WalkNode`.
+type Walker interface {
+	WalkNode(func(Node))
 }
 
-func parseBrackets(tokenizer *Tokenizer, parent *Nodes) {
-	var nodes NodeBrackets
-	parseBetween(tokenizer, parent, (*Nodes)(&nodes), NodeBracketClose{})
-	*parent = append(*parent, nodes)
-}
-
-func parseBraces(tokenizer *Tokenizer, parent *Nodes) {
-	var nodes NodeBraces
-	parseBetween(tokenizer, parent, (*Nodes)(&nodes), NodeBraceClose{})
-	*parent = append(*parent, nodes)
-}
-
-func parseBetween(tokenizer *Tokenizer, parent *Nodes, nodes *Nodes, close Node) {
-	for {
-		node := tokenizer.Next()
-		if node == nil {
-			break
-		}
-		if node == close {
-			return
-		}
-		onNode(tokenizer, nodes, node)
-	}
-	panic(fmt.Errorf(`[sqlp] missing closing %q`, close))
+// Implemented by collection types such as `Nodes` and `ParenNodes`. Used by the
+// global function `WalkNodePtr`.
+type PtrWalker interface {
+	WalkNodePtr(func(*Node))
 }
 
 /*
-Performs a shallow traversal, invoking `fun` for the pointer to each non-nil
-node in the sequence.
+Walks the node, invoking the given function for each non-nil node that doesn't
+implement `Walker`. Nodes that implement `Walker` receive the function as
+input, with implementation-specific behavior. All `Walker` implementations in
+this package perform a shallow walk, invoking a given function once for each
+immediate child.
 */
-func TraverseShallow(nodes Nodes, fun func(*Node) error) error {
-	for i := range nodes {
-		if nodes[i] == nil {
-			continue
-		}
-		err := fun(&nodes[i])
-		if err != nil {
-			return err
-		}
+func WalkNode(val Node, fun func(Node)) {
+	if val == nil || fun == nil {
+		return
 	}
-	return nil
+
+	impl, _ := val.(Walker)
+	if impl != nil {
+		impl.WalkNode(fun)
+		return
+	}
+
+	fun(val)
 }
 
 /*
-Performs a deep traversal, invoking `fun` for the pointer to each leaf node.
+Similar to `WalkNode`, but invokes the function for node pointers rather than
+node values. Allows AST editing.
 */
-func TraverseLeaves(nodes Nodes, fun func(*Node) error) error {
-	for i := range nodes {
-		err := NodeTraverseLeaves(&nodes[i], fun)
-		if err != nil {
-			return err
-		}
+func WalkNodePtr(val *Node, fun func(*Node)) {
+	if val == nil || *val == nil || fun == nil {
+		return
 	}
-	return nil
+
+	impl, _ := (*val).(PtrWalker)
+	if impl != nil {
+		impl.WalkNodePtr(fun)
+		return
+	}
+
+	fun(val)
 }
 
 /*
-Performs a deep traversal, invoking `fun` for the pointer to each leaf node,
-which may include the root passed to the function.
+Similar to `WalkNode`, but performs a deep walk, invoking the function only for
+"leaf nodes" that don't implement `Walker`.
 */
-func NodeTraverseLeaves(ptr *Node, fun func(*Node) error) error {
-	if ptr == nil {
-		return nil
+func DeepWalkNode(val Node, fun func(Node)) {
+	if val == nil || fun == nil {
+		return
 	}
 
-	switch val := (*ptr).(type) {
-	case nil:
-		return nil
-	case Nodes:
-		return TraverseLeaves(val, fun)
-	case NodeParens:
-		return TraverseLeaves(Nodes(val), fun)
-	case NodeBrackets:
-		return TraverseLeaves(Nodes(val), fun)
-	case NodeBraces:
-		return TraverseLeaves(Nodes(val), fun)
-	default:
-		return fun(ptr)
+	impl, _ := val.(Walker)
+	if impl != nil {
+		// TODO does this need optimization?
+		impl.WalkNode(func(val Node) {
+			DeepWalkNode(val, fun)
+		})
+		return
 	}
+
+	fun(val)
 }
 
-// Makes a deep copy of `Nodes` whose mutations won't affect the original.
-func CopyDeep(src Nodes) Nodes {
-	if src == nil {
-		return src
+// Makes a copy that should be safe to modify without affecting the original.
+func CopyNode(node Node) Node {
+	impl, _ := node.(Copier)
+	if impl != nil {
+		return impl.CopyNode()
 	}
-	out := make(Nodes, len(src))
-	for i := range src {
-		out[i] = NodeCopyDeep(src[i])
-	}
-	return out
-}
-
-/*
-For mutable node types, makes a deep copy. For immutable node types, returns the
-node as-is.
-*/
-func NodeCopyDeep(node Node) Node {
-	switch node := node.(type) {
-	case Nodes:
-		return CopyDeep(node)
-	case NodeParens:
-		return NodeParens(CopyDeep(Nodes(node)))
-	case NodeBrackets:
-		return NodeBrackets(CopyDeep(Nodes(node)))
-	case NodeBraces:
-		return NodeBraces(CopyDeep(Nodes(node)))
-	default:
-		return node
-	}
-}
-
-/*
-Returns the first leaf node from the provided collection, or nil.
-*/
-func FirstLeaf(nodes Nodes) Node {
-	if len(nodes) > 0 {
-		return NodeFirstLeaf(nodes[0])
-	}
-	return nil
-}
-
-/*
-If the provided node is a collection, returns the last leaf node from it.
-Otherwise, returns the node as-is.
-*/
-func NodeFirstLeaf(node Node) Node {
-	return nodeBy(node, FirstLeaf)
-}
-
-/*
-Returns the last leaf node from the provided collection, or nil.
-*/
-func LastLeaf(nodes Nodes) Node {
-	if len(nodes) > 0 {
-		return NodeLastLeaf(nodes[len(nodes)-1])
-	}
-	return nil
-}
-
-/*
-If the provided node is a collection, returns the last leaf node from it.
-Otherwise, returns the node as-is.
-*/
-func NodeLastLeaf(node Node) Node {
-	return nodeBy(node, LastLeaf)
-}
-
-func nodeBy(node Node, fun func(Nodes) Node) Node {
-	switch node := node.(type) {
-	case Nodes:
-		return fun(node)
-	case NodeParens:
-		return fun(Nodes(node))
-	case NodeBrackets:
-		return fun(Nodes(node))
-	case NodeBraces:
-		return fun(Nodes(node))
-	default:
-		return node
-	}
+	return node
 }
