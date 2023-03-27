@@ -24,6 +24,7 @@ func TestParse(_ *testing.T) {
 		try(err)
 		eq(astExpected, ast)
 		eq(input, ast.String())
+		eq(input, string(ast.AppendTo(nil)))
 	}
 
 	test(

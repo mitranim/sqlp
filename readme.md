@@ -6,6 +6,10 @@ API docs: https://pkg.go.dev/github.com/mitranim/sqlp.
 
 ## Changelog
 
+### v0.3.0
+
+Renamed method `.Append` in various types to `.AppendTo` for consistency with other libraries.
+
 ### v0.2.0
 
 Various optimizations.

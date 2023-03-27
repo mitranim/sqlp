@@ -67,32 +67,29 @@ AST node. May be a primitive token or a structure. `Tokenizer` emits only
 primitive tokens.
 */
 type Node interface {
-	Append([]byte) []byte
+	// Implement `fmt.Stringer`. Must return the SQL representation of the node,
+	// matching the source it was parsed from.
 	String() string
+
+	// Must append the same text representation as `.String`. Allows more
+	// efficient text encoding for large AST.
+	AppendTo([]byte) []byte
 }
 
 // Implemented by collection types such as `Nodes` and `ParenNodes`. Used by the
 // global `CopyNode` function.
-type Copier interface {
-	CopyNode() Node
-}
+type Copier interface{ CopyNode() Node }
 
 // Implemented by collection types such as `Nodes` and `ParenNodes`.
-type Coll interface {
-	Nodes() Nodes
-}
+type Coll interface{ Nodes() Nodes }
 
 // Implemented by collection types such as `Nodes` and `ParenNodes`. Used by the
 // global function `WalkNode`.
-type Walker interface {
-	WalkNode(func(Node))
-}
+type Walker interface{ WalkNode(func(Node)) }
 
 // Implemented by collection types such as `Nodes` and `ParenNodes`. Used by the
 // global function `WalkNodePtr`.
-type PtrWalker interface {
-	WalkNodePtr(func(*Node))
-}
+type PtrWalker interface{ WalkNodePtr(func(*Node)) }
 
 /*
 Walks the node, invoking the given function for each non-nil node that doesn't

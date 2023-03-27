@@ -110,13 +110,13 @@ var (
 	charsetWhitespace = new(charset).addSet(charsetSpace).addSet(charsetNewline)
 )
 
-func appenderStr(val interface{ Append([]byte) []byte }) string {
-	return bytesToMutableString(val.Append(nil))
+func appenderStr(val interface{ AppendTo([]byte) []byte }) string {
+	return bytesToMutableString(val.AppendTo(nil))
 }
 
 func appendNodesEnclosed(buf []byte, prefix byte, nodes Nodes, suffix byte) []byte {
 	buf = append(buf, prefix)
-	buf = nodes.Append(buf)
+	buf = nodes.AppendTo(buf)
 	buf = append(buf, suffix)
 	return buf
 }
