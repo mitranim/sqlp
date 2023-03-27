@@ -1,3 +1,5 @@
+**Moved to https://github.com/mitranim/sqlb**. This repo is usable but frozen.
+
 ## Overview
 
 **SQL** **P**arse: parser and formatter for rewriting foreign code embedded in SQL queries, such as parameter placeholders: `$1` or `:ident`, or code encased in delimiters: `()` `[]` `{}`. Anything the parser doesn't recognize is preserved as text.
